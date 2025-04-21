@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Paint Splat Duel</title>
+  <style>
+    html, body {
+      margin: 0;
+      background: #111;
+      overflow: hidden;
+      font-family: sans-serif;
+      color: white;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <p>Drag and release to splat the target. Closest to nose wins.</p>
+    <p id="score">Score - Player A: 0 | Player B: 0</p>
+  </div>
+  <canvas id="game" width="1024" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const playerImages = [
+      { src: "https://upload.wikimedia.org/wikipedia/commons/6/65/User_icon_black.png", x: 200, y: 150, nose: { x: 250, y: 200 } },
+      { src: "https://upload.wikimedia.org/wikipedia/commons/6/65/User_icon_black.png", x: 700, y: 150, nose: { x: 750, y: 200 } }
+    ];
+
+    let imagesLoaded = 0;
+    let players = [];
+    playerImages.forEach((data, i) => {
+      const img = new Image();
+      img.onload = () => {
+        imagesLoaded++;
+        players[i] = { ...data, img };
+        if (imagesLoaded === 2) drawScene();
+      };
+      img.src = data.src;
+    });
+
+    let dragStart = null;
+    let splats = [];
+    let currentPlayer = 0;
+    let scores = [0, 0];
+    let roundShots = [[], []];
+
+    function drawScene() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Draw players
+      players.forEach(p => ctx.drawImage(p.img, p.x, p.y, 100, 100));
+
+      // Draw splats
+      splats.forEach(s => {
+        ctx.beginPath();
+        ctx.fillStyle = s.color;
+        ctx.arc(s.x, s.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Draw drag line
+      if (dragStart) {
+        ctx.strokeStyle = "white";
+        ctx.beginPath();
+        ctx.moveTo(dragStart.x, dragStart.y);
+        ctx.lineTo(mouse.x, mouse.y);
+        ctx.stroke();
+      }
+
+      requestAnimationFrame(drawScene);
+    }
+
+    let mouse = { x: 0, y: 0 };
+    canvas.addEventListener("mousedown", e => {
+      dragStart = { x: e.offsetX, y: e.offsetY };
+    });
+    canvas.addEventListener("mousemove", e => {
+      mouse.x = e.offsetX;
+      mouse.y = e.offsetY;
+    });
+    canvas.addEventListener("mouseup", e => {
+      if (!dragStart) return;
+      const power = {
+        x: (dragStart.x - e.offsetX) * 0.2,
+        y: (dragStart.y - e.offsetY) * 0.2,
+      };
+      const splat = {
+        x: dragStart.x,
+        y: dragStart.y,
+        vx: power.x,
+        vy: power.y,
+        color: currentPlayer === 0 ? "red" : "blue",
+        player: currentPlayer,
+        frame: 0
+      };
+      splats.push(splat);
+      roundShots[currentPlayer].push(splat);
+      dragStart = null;
+
+      if (roundShots[0].length >= 3 && roundShots[1].length >= 3) {
+        setTimeout(evaluateRound, 500);
+      } else {
+        currentPlayer = (currentPlayer + 1) % 2;
+      }
+    });
+
+    function evaluateRound() {
+      let dists = [Infinity, Infinity];
+      roundShots.forEach((shots, playerIndex) => {
+        shots.forEach(s => {
+          const nose = players[playerIndex].nose;
+          const d = Math.hypot(s.x - nose.x, s.y - nose.y);
+          if (d < dists[playerIndex]) dists[playerIndex] = d;
+        });
+      });
+
+      let winner = dists[0] < dists[1] ? 0
